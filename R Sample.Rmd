@@ -1,0 +1,405 @@
+---
+title: "R Sample"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Surviving R 101 
+```{r}
+help() #insert name of anything and it will show you an example
+example() #insert name of anything and it will show you an example
+data() #use as is, to check available datasets 
+library() #use as is, to check installed packages
+search() #use as is, to check loaded libraries
+name = code  #use the equal sign to store "code" and retrieve later as object 
+```
+
+
+#Step 1:Install Packages 
+
+```{r}
+install.packages("ggplot2", dependencies=T)
+install.packages("dplyr", dependencies = T)
+install.packages("gridExra", dependencies = T)
+install.packages("broom", dependencies = T)
+
+```
+
+
+#Step 2: Load Libraries 
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+library(broom)
+```
+
+
+#Step 3: Understanding Dataset
+
+```{r}
+
+# if data is external, go to environment and import dataset before retrieving
+
+getwd() #to know current working directory 
+dir() #to see files in current working directory 
+dmd <- read.csv("diamonds.csv") #if needed to import from current wd 
+data("diamonds") #choose dataset
+
+
+dmd = diamonds #create object out of dataset, to not alter original
+View(dmd) #to see diamonds dataset, which is preloaded to ggplot2
+str(dmd) #to see structure of dataset
+dim(dmd) #see number of rows(observations) and columns(variables)
+ls(dmd) #see objects within dataset
+
+set.seed(100) #so you stay with same sample throughout 
+sdmd <- sample_n(diamonds, 100) #creating dataframe with sample of data
+
+
+```
+
+
+#Step 4: Common Summary Statistics & Calculations
+
+```{r}
+summary(dmd) #to see summary statistics per column (including mean & 3Qrt)
+
+avgprice = 
+  mean(dmd$price,na.rm = T) #calculate avg price, & assign to object
+
+stdprice = 
+  sd(dmd$price, na.rm = T) #calculate stdev of price, & assign to object
+
+medianprice = 
+  median(dmd$price) #to calculate median number
+
+qtdepth = 
+  quantile(dmd$depth,c(0,0.25, 0.5,0.75,1)) #calculate quantiles 
+
+range()
+sum()
+sqrt()
+count()
+
+
+```
+
+
+#Step 5: Testing Normality 
+
+```{r}
+#graphing a histogram with distribution line from sample data
+
+avg = 
+  mean(sdmd$depth,na.rm = T)
+
+std = 
+  sd(sdmd$depth, na.rm = T)
+
+sdmdhist1 = 
+  ggplot(data=sdmd) + geom_histogram(aes(x=depth, y=..density..,    color=I("gray")),binwidth=.45) + stat_function(fun=dnorm,args=list(mean=avg,sd=std))
+
+sdmdhist1 #to see it
+
+#plotting a scatterplot with 45 degree line from sample data
+
+sdmdplot1 = 
+  ggplot(data=sdmd, aes(sample=scale(depth))) + stat_qq() + 
+ geom_abline(intercept=0, slope=1)
+
+
+#comparing graphs side by side
+
+sdmd1and2 = 
+  gridExtra::grid.arrange(sdmdhist1,sdmdplot1,nrow=1)
+
+#double checking with QQplots 
+qqnorm(dmd$depth) 
+qqline(dmd$depth)
+
+#sample from normal distribution with same avg and std
+
+x = 
+  rnorm(30,mean=avg,sd=std) 
+
+
+```
+
+#Step 6: T-Test Calculations 
+
+```{r}
+
+
+#Confidence interval is meaninful only for two-sided but take t , df       and p value from "greater" alternative, one sided. 
+# If the p-value is less than 0.05, we reject the null hypothesis(H0)
+
+#one-sample t-test for average price of diamonds
+
+    #H0: avgprice >= mu vs H1: price less than mu
+
+t.test(dmd$price, alternative = "greater", mu = 3932)
+
+    #H0: avgprice = mu vs H1: avgprice not equal to mu
+t.test(dmd$price, alternative="two.sided", mu = 3932, conf.level = 0.95)
+
+#two-sample two-tail independent t-test
+  
+  #Is the price of diamonds with a "Premium" and "Ideal" cut the same(H0)?    Is there enough evidence to claim that the price is different (H1)? 
+
+t.test(x=dmd$price[dmd$cut=="Premium"], y=dmd$price[dmd$cut=="Ideal"], paired = FALSE)
+
+
+#How to use the `dplyr` function `group_by()` to run t-tests per group:
+dmd %>%
+  group_by(cut) %>% 
+  do(tidy(t.test(.$price, alternative="greater",mu=3932)$p.value))
+
+```
+
+
+#Step 7: Probability Calculations
+
+```{r}
+
+#1. Relation Table 
+
+table(dmd$color,dmd$cut) #to know the cut of diamonds based on color
+
+#2. Cumulative Probability with one variable
+
+ttcolor = table(dmd$color) #give you table with values and frequencies 
+ptcolor = prop.table(ttcolor) #give you probability table of colors
+cumsum(ptcolor) #give you cumulative probability table
+
+
+#3. Cumulative Probability with two variables
+
+   #What is the probability that a premium cut diamond is in the 3rd           quartile (above 75%) in terms of `price`?
+  
+q3 = quantile(dmd$price, 0.75)
+ttprice = table(dmd$price, dmd$cut)
+probprice =prop.table(ttprice, 2) [,"Premium"]
+cumprice = cumsum(probprice)
+cat("The probability that a premium cut diamond is above ", q3, " in price is", 1-cumprice["5324"])
+
+#Manual Check
+qplot(price, carat, data=dmd, geom="point", colour=cut)
+
+q3prem=
+dmd %>% select(price, cut) %>% filter(price >= q3) %>% count( cut == "Premium")
+
+q3all=
+dmd %>% select(price) %>% count(price >= q3 ) 
+
+q3prem / q3all
+4311 / 13485 = .319
+
+
+#4. Random Sampling 
+
+sample(dmd$cut,10, replace=TRUE)
+
+```
+
+
+#Step 8: Probability Distributions (using original Data, for clarity)
+
+```{r}
+
+#1. Normal Distribution 
+
+      #dnorm: returns the height of the probability distribution at each          point
+
+x <- seq(-2,2,by=.1) #from,to,increment of sequence
+y <- dnorm(x) #assuming that mean and stdev is 0,1
+plot(x,y) 
+
+v <- c(0,1,2)
+dnorm(v)
+
+dnorm(sdmd$carat)
+
+      #pnorm: computes the probability that a normally distributed random       number will be less than that number. Use lower.tail=False to             calculate if number is larger than the given number
+
+x <- seq(1,4,by=.1) 
+y <- pnorm(x,mean=2.5,sd = .1) 
+plot(x,y) 
+
+v <- c(0,1,2)
+pnorm(v)
+
+pnorm(dmd$carat,3, lower.tail=FALSE)
+
+      #qnorm:give the function a probability it returns the associated          Z-score,the number whose cumulative distribution matches the              probability
+
+qnorm(0.75,mean=5,sd=2)
+
+v = c(0.1,0.3,0.75)
+qnorm(v)
+
+qnorm(dmd$carat)
+
+
+    #rnorm: generate random numbers whose distribution is normal
+
+ rnorm(4,mean=3,sd=3)
+ 
+y <- rnorm(200,mean=-2,sd=4)
+hist(y)
+qqnorm(y) 
+qqline(y)
+
+
+#2. Binomial Distribution 
+
+#The binomial distribution is same, but requires two extra parameters: the number of trials and the probability of success for a single trial. 
+
+x <- seq(0,100,by=1)
+y <- dbinom(x,100,0.6)
+plot(x,y)
+
+pbinom(26,51,0.5)
+
+qbinom(0.25,51,1/2)
+
+rbinom(5,100,.7)
+
+
+#3. Uniform Distribution 
+
+
+#Let us generate 1000 random number under a uniform                   distribution, e.g.,between 0 and 1. Then, let us create a            histogram for this data and superimpose the corresponding            function using `stat_function`
+
+x = runif(1000, min=0, max=1)
+qplot(x, geom="blank") +
+  geom_histogram(aes(x=x, y=..density..), colour=I("gray")) +
+  stat_function(fun=dunif, args = list(min=0, max=1), colour=I("red"))
+
+
+#4. Exponential Distribution 
+        
+#Generate a sequence of x values between 0 and 5, with step           size0.001. Next, compute the corresponding y values under the        exponential distribution. Next, generate 1000 random numbers under the same exponential distribution, create a histogram and superimpose the corresponding function.
+
+x = seq(0, 5, 0.001)
+y = dexp(x, 1)
+qplot(x,y,geom="line")
+
+xrandom = rexp(1000, 1) + rnorm(1000, 1, 0.75)
+qplot(x, geom="blank") +
+  geom_histogram(aes(x=xrandom, y=..density..), colour=I("gray")) + stat_function(fun=dexp, args = list(rate=1), colour=I("red"), alpha=I(0.5))
+
+```
+
+
+#Step 9: Tranformation of Dataset
+
+```{r}
+#1. FILTER (rows)
+
+dmdfilter1= 
+  dmd %>% 
+  slice(1:5) #to filter the first 5 rows 
+
+dmdfilter2 = 
+  dmd %>% 
+  filter(color == 'E' & cut== 'Premium') %>% #to filter with two conditions
+  filter(price < 600)
+
+
+#2. SELECT (columns)
+
+dmdselect1 = 
+  dmd %>%
+    select(carat:clarity) #to select those 3 columns
+
+dmdselect2=
+  dmd %>% 
+    rename(weight = carat ) #to rename carat column as weight
+
+dmdselect3=
+  dmd %>%
+    select(color) %>%
+    distinct() #to see unique number of colots
+
+
+#3. ARRANGE (rows)
+
+dmdarrange1=
+  dmd %>% 
+    select(cut, price) %>%
+    arrange(desc(price)) 
+    head(10) #see top 10
+
+
+#4. MUTATE (structure or variables)
+
+dmdmutate1=
+  dmd %>%
+    mutate(wd_ratio = carat/depth) #added new column with calculation
+
+dmdmutate2=
+  dmd %>%
+    mutate(elitefilter = ifelse(price > 600, yes = 'upsell', no = 'discount' )) %>% select(price,elitefilter) %>% arrange(desc(price)) %>%
+    print(n=50)
+
+
+#5. SUMMARISE (variables to values)
+
+dmdsummarise1=
+  dmd %>% 
+    group_by(color) %>%
+    summarise (avgprice_percolor = mean(price))
+
+```
+
+
+#Step 10: Elaborated Graphs
+
+```{r}
+
+#If I want to use ggplot, there must be an intermiedate step where we create a data frame with x and y, or sample frame. 
+
+
+    #histogram of depth from 0 to 100
+ggplot(data=sdmd) + geom_histogram(aes(x=depth, color=I("black"), fill=cut), binwidth=.5, position="identity") + scale_x_continuous(breaks = seq(0, 100, 5),limits = c(55,70)) + labs(title="A Complete Histogram", x="Depth Values")
+     
+    #histogram with Normal Distribution 
+
+ggplot(data=sdmd) + geom_histogram(aes(x=carat, y=..density.., color=I("gray")),binwidth=.25) + stat_function(fun=dnorm,args=list(mean=avg,sd=stdev))
+
+    #histogram of prices bigger than 5324
+ggplot(data=sdmd) + geom_histogram(aes(x=price, color=I("black"), fill=cut), binwidth=200, position="identity") + scale_x_continuous(breaks = seq(5324, 19000, 1000),limits = c(5324,19000)) + labs(title="A Complete Histogram", x="Depth Values")
+
+    #scatterplot of price and carat connected by line using qplot
+qplot(carat, price, data=sdmd, geom="line", colour=I("blue")) +
+geom_point(colour=I("red"), alpha=I(0.5))
+      
+
+```
+
+#Step 11: Faceting 
+
+```{r}
+
+#* it creates tables of graphics by splitting the data into subsets and displayingthe same graph for each subset
+
+row var ~ . # will create a single column with multiple rows
+. ~ col var  # will create a single row with multiple columns
+
+qplot(carat, price, data=dmd, geom="point", colour=cut) +
+  facet_wrap(~ color, ncol=5)
+
+```
+
+
+
+
+
+
+
